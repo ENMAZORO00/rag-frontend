@@ -37,22 +37,35 @@ function App() {
   };
 
   const askQuestion = async () => {
-    if (!question) return;
+    if (!question.trim()) return;
 
     const userMessage = { role: "user", content: question };
-    setMessages((prev) => [...prev, userMessage]);
+    const tempAiMessage = { role: "ai", content: "", loading: true };
+
+    // Show question instantly + show AI loader
+    setMessages((prev) => [...prev, userMessage, tempAiMessage]);
     setQuestion("");
+    setLoading(true);
 
     try {
-      setLoading(true);
       const res = await axios.post("http://127.0.0.1:8000/ask", {
         query: question,
       });
 
-      const aiMessage = { role: "ai", content: res.data.answer };
-      setMessages((prev) => [...prev, aiMessage]);
+      // Replace temporary AI bubble with actual answer
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.loading ? { role: "ai", content: res.data.answer } : msg,
+        ),
+      );
     } catch (err) {
-      alert("Error asking question");
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.loading
+            ? { role: "ai", content: "Something went wrong ❌" }
+            : msg,
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -117,33 +130,64 @@ function App() {
 
         {/* CHAT AREA */}
         <div className="chat-container">
-          <div className="chat-messages">
-            {messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.role}`}>
-                {msg.content}
+          {messages.length === 0 ? (
+            // Centered input initially
+            <div className="chat-messages-empty">
+              <div className="centered-input-wrapper">
+                <div className="chat-input chat-input-centered">
+                  <input
+                    type="text"
+                    value={question}
+                    placeholder="Ask something about your document..."
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && !loading && askQuestion()
+                    }
+                    disabled={loading}
+                  />
+                  <button onClick={askQuestion} disabled={loading}>
+                    {loading ? "..." : "Send"}
+                  </button>
+                </div>
               </div>
-            ))}
+            </div>
+          ) : (
+            // Chat view after first question
+            <>
+              <div className="chat-messages">
+                {messages.map((msg, index) => (
+                  <div key={index} className={`message ${msg.role}`}>
+                    {msg.loading ? (
+                      <div className="loader">
+                        <div className="spinner"></div>
+                        AI is thinking...
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                ))}
 
-            {loading && (
-              <div className="loader">
-                <div className="spinner"></div>
-                AI is thinking...
+                <div ref={chatEndRef}></div>
               </div>
-            )}
 
-            <div ref={chatEndRef}></div>
-          </div>
-
-          <div className="chat-input">
-            <input
-              type="text"
-              value={question}
-              placeholder="Ask something about your document..."
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && askQuestion()}
-            />
-            <button onClick={askQuestion}>Send</button>
-          </div>
+              <div className="chat-input">
+                <input
+                  type="text"
+                  value={question}
+                  placeholder="Ask something about your document..."
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && !loading && askQuestion()
+                  }
+                  disabled={loading}
+                />
+                <button onClick={askQuestion} disabled={loading}>
+                  {loading ? "..." : "Send"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
