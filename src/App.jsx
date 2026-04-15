@@ -7,8 +7,12 @@ function App() {
   const [documentId, setDocumentId] = useState("");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // for chat
+  const [uploading, setUploading] = useState(false); // ✅ for upload
   const [dragActive, setDragActive] = useState(false);
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [summary, setSummary] = useState("");
 
   const chatEndRef = useRef(null);
 
@@ -23,16 +27,41 @@ function App() {
     formData.append("file", selectedFile);
 
     try {
-      setLoading(true);
+      setUploading(true);
+      setUploadProgress(0);
+      setSummary("");
+
+      // 🔥 Dummy progress animation
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        if (progress <= 90) {
+          setUploadProgress(progress);
+        }
+      }, 200);
+
       const res = await axios.post("http://127.0.0.1:8000/upload", formData);
+
+      clearInterval(interval);
+      setUploadProgress(100);
+
+      console.log("UPLOAD RESPONSE:", res.data); // 🔍 debug
+
       setDocumentId(res.data.document_id);
+      setSummary(res.data.summary); // ✅ summary
+
       setMessages([
         { role: "system", content: "Document uploaded successfully ✅" },
       ]);
+
+      // small delay so user sees 100%
+      setTimeout(() => {
+        setUploading(false);
+      }, 500);
     } catch (err) {
+      console.error(err);
       alert("Upload failed");
-    } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
@@ -42,7 +71,6 @@ function App() {
     const userMessage = { role: "user", content: question };
     const tempAiMessage = { role: "ai", content: "", loading: true };
 
-    // Show question instantly + show AI loader
     setMessages((prev) => [...prev, userMessage, tempAiMessage]);
     setQuestion("");
     setLoading(true);
@@ -52,7 +80,6 @@ function App() {
         query: question,
       });
 
-      // Replace temporary AI bubble with actual answer
       setMessages((prev) =>
         prev.map((msg) =>
           msg.loading ? { role: "ai", content: res.data.answer } : msg,
@@ -114,8 +141,9 @@ function App() {
               id="fileUpload"
               hidden
               onChange={(e) => {
-                setFile(e.target.files[0]);
-                uploadFile(e.target.files[0]);
+                const f = e.target.files[0];
+                setFile(f);
+                uploadFile(f);
               }}
             />
             <label htmlFor="fileUpload" className="browse-btn">
@@ -123,15 +151,36 @@ function App() {
             </label>
           </div>
 
+          {/* ✅ Progress Bar */}
+          {uploading && (
+            <div className="progress-container">
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              <p>{uploadProgress}% uploading...</p>
+            </div>
+          )}
+
+          {/* ✅ Success */}
           {documentId && (
             <div className="success-msg">Document ready for questions ✅</div>
+          )}
+
+          {/* ✅ Summary */}
+          {summary && (
+            <div className="summary-box">
+              <h4>📌 Summary</h4>
+              <pre>{summary}</pre>
+            </div>
           )}
         </div>
 
         {/* CHAT AREA */}
         <div className="chat-container">
           {messages.length === 0 ? (
-            // Centered input initially
             <div className="chat-messages-empty">
               <div className="centered-input-wrapper">
                 <div className="chat-input chat-input-centered">
@@ -152,7 +201,6 @@ function App() {
               </div>
             </div>
           ) : (
-            // Chat view after first question
             <>
               <div className="chat-messages">
                 {messages.map((msg, index) => (
@@ -167,7 +215,6 @@ function App() {
                     )}
                   </div>
                 ))}
-
                 <div ref={chatEndRef}></div>
               </div>
 
