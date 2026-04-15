@@ -2,23 +2,72 @@ import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import "./App.css";
 
+const API_BASE = "http://127.0.0.1:8000";
+
 function App() {
   const [file, setFile] = useState(null);
   const [documentId, setDocumentId] = useState("");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false); // for chat
-  const [uploading, setUploading] = useState(false); // ✅ for upload
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
-
   const [uploadProgress, setUploadProgress] = useState(0);
   const [summary, setSummary] = useState("");
+  const [activeMedia, setActiveMedia] = useState(null);
 
   const chatEndRef = useRef(null);
+  const audioRef = useRef(null);
+  const videoRef = useRef(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!activeMedia) return undefined;
+    const isVideo = activeMedia.mediaType.startsWith("video/");
+    const element = isVideo ? videoRef.current : audioRef.current;
+    if (!element) return undefined;
+
+    const stopAt = Number(activeMedia.endSec || 0);
+    const startAt = Number(activeMedia.startSec || 0);
+
+    const onLoaded = () => {
+      element.currentTime = startAt;
+      element.play().catch(() => {});
+    };
+    const onTimeUpdate = () => {
+      if (stopAt > 0 && element.currentTime >= stopAt) {
+        element.pause();
+      }
+    };
+
+    element.addEventListener("loadedmetadata", onLoaded);
+    element.addEventListener("timeupdate", onTimeUpdate);
+    if (element.readyState >= 1) onLoaded();
+
+    return () => {
+      element.removeEventListener("loadedmetadata", onLoaded);
+      element.removeEventListener("timeupdate", onTimeUpdate);
+    };
+  }, [activeMedia]);
+
+  const toAbsoluteMediaUrl = (mediaUrl) => {
+    if (!mediaUrl) return "";
+    if (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://")) return mediaUrl;
+    return `${API_BASE}${mediaUrl}`;
+  };
+
+  const playRelevantSegment = (source) => {
+    setActiveMedia({
+      url: toAbsoluteMediaUrl(source.media_url),
+      mediaType: source.media_type || "audio/mpeg",
+      startSec: source.start_sec || 0,
+      endSec: source.end_sec || 0,
+      filename: source.filename || "media",
+    });
+  };
 
   const uploadFile = async (selectedFile) => {
     if (!selectedFile) return alert("Select a file first");
@@ -40,21 +89,18 @@ function App() {
         }
       }, 200);
 
-      const res = await axios.post("http://127.0.0.1:8000/upload", formData);
+      const res = await axios.post(`${API_BASE}/upload`, formData);
 
       clearInterval(interval);
       setUploadProgress(100);
 
-      console.log("UPLOAD RESPONSE:", res.data); // 🔍 debug
-
       setDocumentId(res.data.document_id);
-      setSummary(res.data.summary); // ✅ summary
+      setSummary(res.data.summary || "");
 
       setMessages([
-        { role: "system", content: "Document uploaded successfully ✅" },
+        { role: "system", content: "File uploaded and indexed successfully." },
       ]);
 
-      // small delay so user sees 100%
       setTimeout(() => {
         setUploading(false);
       }, 500);
@@ -66,30 +112,32 @@ function App() {
   };
 
   const askQuestion = async () => {
-    if (!question.trim()) return;
+    const query = question.trim();
+    if (!query || loading) return;
 
-    const userMessage = { role: "user", content: question };
-    const tempAiMessage = { role: "ai", content: "", loading: true };
-
+    const userMessage = { role: "user", content: query };
+    const tempAiMessage = { role: "ai", content: "", loading: true, sources: [] };
     setMessages((prev) => [...prev, userMessage, tempAiMessage]);
     setQuestion("");
     setLoading(true);
 
     try {
-      const res = await axios.post("http://127.0.0.1:8000/ask", {
-        query: question,
-      });
+      const res = await axios.post(`${API_BASE}/ask`, { query });
+      const answer = res.data?.answer || "No answer found.";
+      const sources = Array.isArray(res.data?.sources) ? res.data.sources : [];
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.loading ? { role: "ai", content: res.data.answer } : msg,
+          msg.loading
+            ? { role: "ai", content: answer, loading: false, sources }
+            : msg,
         ),
       );
     } catch (err) {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.loading
-            ? { role: "ai", content: "Something went wrong ❌" }
+            ? { ...msg, content: "Something went wrong ❌", loading: false }
             : msg,
         ),
       );
@@ -134,11 +182,12 @@ function App() {
             onDrop={handleDrop}
           >
             <p>Drag & Drop your file here</p>
-            <span>Supports PDF, DOCX, PPT, Excel, TXT</span>
+            <span>Supports PDF, DOCX, PPT, Excel, TXT, MP3, WAV, M4A, MP4, MOV, WEBM</span>
 
             <input
               type="file"
               id="fileUpload"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.mp3,.wav,.m4a,.mp4,.mov,.webm"
               hidden
               onChange={(e) => {
                 const f = e.target.files[0];
@@ -211,7 +260,22 @@ function App() {
                         AI is thinking...
                       </div>
                     ) : (
-                      msg.content
+                      <div className="message-body">
+                        <div>{msg.content}</div>
+                        {msg.role === "ai" && Array.isArray(msg.sources) && msg.sources.length > 0 && (
+                          <div className="source-list">
+                            {msg.sources.map((source, sourceIndex) => (
+                              <button
+                                key={`${source.media_id || "media"}-${sourceIndex}`}
+                                className="play-btn"
+                                onClick={() => playRelevantSegment(source)}
+                              >
+                                Play relevant segment ({Math.floor(source.start_sec || 0)}s - {Math.floor(source.end_sec || 0)}s)
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -237,6 +301,17 @@ function App() {
           )}
         </div>
       </div>
+
+      {activeMedia && (
+        <div className="media-player-panel">
+          <h4>Relevant media segment: {activeMedia.filename}</h4>
+          {activeMedia.mediaType.startsWith("video/") ? (
+            <video ref={videoRef} controls src={activeMedia.url} />
+          ) : (
+            <audio ref={audioRef} controls src={activeMedia.url} />
+          )}
+        </div>
+      )}
 
       {/* FOOTER */}
       <footer className="footer">

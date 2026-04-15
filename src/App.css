@@ -193,6 +193,7 @@ body {
 
 .message.ai {
   background: #429945;
+  color: #fff;
 }
 
 .message.system {
@@ -301,4 +302,48 @@ body {
   white-space: pre-wrap;
   margin: 0;
   font-family: inherit;
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.play-btn {
+  background: #0f172a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.play-btn:hover {
+  background: #1e293b;
+}
+
+.media-player-panel {
+  background: #ffffff;
+  margin: 0 30px 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.media-player-panel h4 {
+  margin: 0 0 10px;
+}
+
+.media-player-panel audio,
+.media-player-panel video {
+  width: 100%;
+  max-height: 360px;
 }
