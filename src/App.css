@@ -25,6 +25,24 @@ body {
   font-size: 20px;
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-user {
+  color: #475569;
+  font-size: 14px;
+}
+
+.logout-btn {
+  border: none;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 14px;
+}
+
 .nav-links span {
   margin-left: 20px;
   font-size: 14px;
@@ -90,6 +108,15 @@ body {
 .success-msg {
   margin-top: 15px;
   color: green;
+  font-size: 14px;
+}
+
+.error-msg {
+  margin-top: 15px;
+  color: #991b1b;
+  background: #fee2e2;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 14px;
 }
 
@@ -283,6 +310,12 @@ body {
 
   .message {
     max-width: 85%;
+  }
+
+  .navbar {
+    padding: 16px 20px;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 }
 

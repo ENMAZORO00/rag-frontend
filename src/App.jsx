@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import axios from "axios";
 import "./App.css";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { api, API_BASE } from "./lib/api";
+import { useAuth } from "./hooks/useAuth";
 
 function App() {
-  const [file, setFile] = useState(null);
+  const { user, logout } = useAuth();
   const [documentId, setDocumentId] = useState("");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
@@ -15,6 +14,7 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [summary, setSummary] = useState("");
   const [activeMedia, setActiveMedia] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const chatEndRef = useRef(null);
   const audioRef = useRef(null);
@@ -79,8 +79,8 @@ function App() {
       setUploading(true);
       setUploadProgress(0);
       setSummary("");
+      setErrorMessage("");
 
-      // 🔥 Dummy progress animation
       let progress = 0;
       const interval = setInterval(() => {
         progress += 10;
@@ -89,7 +89,7 @@ function App() {
         }
       }, 200);
 
-      const res = await axios.post(`${API_BASE}/upload`, formData);
+      const res = await api.post("/upload", formData);
 
       clearInterval(interval);
       setUploadProgress(100);
@@ -106,7 +106,7 @@ function App() {
       }, 500);
     } catch (err) {
       console.error(err);
-      alert("Upload failed");
+      setErrorMessage(err.response?.data?.detail || "Upload failed");
       setUploading(false);
     }
   };
@@ -120,9 +120,10 @@ function App() {
     setMessages((prev) => [...prev, userMessage, tempAiMessage]);
     setQuestion("");
     setLoading(true);
+    setErrorMessage("");
 
     try {
-      const res = await axios.post(`${API_BASE}/ask`, { query });
+      const res = await api.post("/ask", { query });
       const answer = res.data?.answer || "No answer found.";
       const sources = Array.isArray(res.data?.sources) ? res.data.sources : [];
 
@@ -141,6 +142,9 @@ function App() {
             : msg,
         ),
       );
+      setErrorMessage(
+        err.response?.data?.detail || "We could not complete your request.",
+      );
     } finally {
       setLoading(false);
     }
@@ -150,7 +154,6 @@ function App() {
     e.preventDefault();
     setDragActive(false);
     const droppedFile = e.dataTransfer.files[0];
-    setFile(droppedFile);
     uploadFile(droppedFile);
   };
 
@@ -163,6 +166,12 @@ function App() {
           style={{ color: "black", fontSize: "35px", fontWeight: "bold" }}
         >
           Document AI
+        </div>
+        <div className="nav-actions">
+          <span className="nav-user">{user?.email}</span>
+          <button type="button" className="logout-btn" onClick={logout}>
+            Logout
+          </button>
         </div>
       </nav>
 
@@ -191,7 +200,6 @@ function App() {
               hidden
               onChange={(e) => {
                 const f = e.target.files[0];
-                setFile(f);
                 uploadFile(f);
               }}
             />
@@ -225,6 +233,8 @@ function App() {
               <pre>{summary}</pre>
             </div>
           )}
+
+          {errorMessage && <div className="error-msg">{errorMessage}</div>}
         </div>
 
         {/* CHAT AREA */}
